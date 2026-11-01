@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.example.library_management_system.Enums.BookEnums;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -25,8 +26,9 @@ public class Books {
     private String bookTitle;
 
     @NotBlank(message = "Author Name is required")
-    private  String authorName;
+    private String authorName;
     private int bookLength;
+    private int price;
     private String bookUrl;
     @Enumerated(EnumType.STRING)
     private BookEnums.BookCategory bookCategory;
@@ -36,10 +38,16 @@ public class Books {
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "User_Books",
-            joinColumns = @JoinColumn(name="book_id"),
+            joinColumns = @JoinColumn(name = "book_id"),
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
     private List<User> users;
+
+    @Column(name = "is_deleted")
+    private boolean isDeleted = false; //default delete will false.
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     private LocalDateTime bookPublishDate;
     @CreationTimestamp
