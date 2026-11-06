@@ -1,0 +1,647 @@
+=== src/main/java/org/example/library_management_system/Services/BookServices.java ===
+package org.example.library_management_system.Services;
+
+import lombok.RequiredArgsConstructor;
+import org.example.library_management_system.Dtos.BookDtos.BookRequestDTO;
+import org.example.library_management_system.Dtos.BookDtos.BookResponseDTO;
+import org.example.library_management_system.Enums.BookEnums;
+import org.example.library_management_system.Enums.UserEnum;
+import org.example.library_management_system.Models.Books;
+import org.example.library_management_system.Models.User;
+import org.example.library_management_system.Repository.BookRepository;
+import org.example.library_management_system.Repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+import static java.util.stream.Collectors.toList;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class BookServices {
+    private final UserRepository userRepository;
+    private final BookRepository bookRepository;
+
+    //+++++++++++++++++++++++++++ Book Add Service ++++++++++++++++++++++++++++++++++++++++++++++++++ \\
+    @Transactional
+    public BookResponseDTO addBook(BookRequestDTO bookRequestDTO, UUID userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User Not found"));
+        if (user.getRole() != UserEnum.Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your are not authorized");
+        }
+
+        boolean existBook = bookRepository.existsByBookTitleAndAuthorName(bookRequestDTO.getTitle(), bookRequestDTO.getAuthor());
+        if (existBook)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This book by the same author already exists");
+
+        Books book = new Books();
+
+        book.setBookTitle(bookRequestDTO.getTitle());
+        book.setAuthorName(bookRequestDTO.getAuthor());
+        book.setPrice(bookRequestDTO.getPrice());
+        book.setBookLength(bookRequestDTO.getLength());
+        book.setBookCategory(BookEnums.BookCategory.valueOf(bookRequestDTO.getCategory()));
+        book.setBookType(BookEnums.BookType.valueOf(bookRequestDTO.getType()));
+        Books saveBook = bookRepository.save(book);
+
+        return BookResponseDTO.builder()
+                .id(saveBook.getId())
+                .title(saveBook.getBookTitle())
+                .author(saveBook.getAuthorName())
+                .price(saveBook.getPrice())
+                .length(saveBook.getBookLength())
+                .bookUrl(saveBook.getBookUrl())
+                .createdAt(saveBook.getCreatedAt())
+                .category(saveBook.getBookCategory() != null ? saveBook.getBookCategory().name() : null)
+                .type(saveBook.getBookType() != null ? saveBook.getBookType().name() : null)
+                .build();
+    }
+
+    //+++++++++++++++++++++++++++ Book Update Service ++++++++++++++++++++++++++++++++++++++++++++++++++ \\
+    @Transactional
+    public BookResponseDTO updateBook(BookRequestDTO bookRequestDTO, UUID bookId, UUID userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User Not found"));
+        if (user.getRole() != UserEnum.Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your are not authorized");
+        }
+
+        Books book = bookRepository.findById(bookId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book Not Found"));
+
+        book.setBookTitle(bookRequestDTO.getTitle());
+        book.setAuthorName(bookRequestDTO.getAuthor());
+        book.setPrice(bookRequestDTO.getPrice());
+        book.setBookLength(bookRequestDTO.getLength());
+        book.setBookCategory(BookEnums.BookCategory.valueOf(bookRequestDTO.getCategory()));
+        book.setBookType(BookEnums.BookType.valueOf(bookRequestDTO.getType()));
+        Books updateBook = bookRepository.save(book);
+
+        return BookResponseDTO.builder()
+                .id(updateBook.getId())
+                .title(updateBook.getBookTitle())
+                .author(updateBook.getAuthorName())
+                .price(updateBook.getPrice())
+                .length(updateBook.getBookLength())
+                .bookUrl(updateBook.getBookUrl())
+                .category(updateBook.getBookCategory() != null ? updateBook.getBookCategory().name() : null)
+                .type(updateBook.getBookType() != null ? updateBook.getBookType().name() : null)
+                .build();
+    }
+
+    //+++++++++++++++++++++++++++ Book Delete Service ++++++++++++++++++++++++++++++++++++++++++++++++++ \\
+    @Transactional
+    public String deletedBook(UUID userId, UUID bookId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (user.getRole() != UserEnum.Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not authorized");
+        }
+        Books findBook = bookRepository.findById(bookId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
+
+        findBook.setDeleted(true);
+        findBook.setDeletedAt(LocalDateTime.now());
+
+        bookRepository.save(findBook);
+        return "Book deleted successfully";
+    }
+
+
+    public List<BookResponseDTO> getAllBooks() {
+        List<Books> findAllBooks = bookRepository.findByIsDeletedFalse();
+        return findAllBooks.stream().map(
+                books -> BookResponseDTO.builder()
+                        .id(books.getId())
+                        .title(books.getBookTitle())
+                        .author(books.getAuthorName())
+                        .price(books.getPrice())
+                        .length(books.getBookLength())
+                        .bookUrl(books.getBookUrl())
+                        .category(books.getBookCategory() != null ? books.getBookCategory().name() : null)
+                        .type(books.getBookType() != null ? books.getBookType().name() : null)
+                        .build()).toList();
+    }
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Services/AuthServices.java ===
+package org.example.library_management_system.Services;
+
+import lombok.RequiredArgsConstructor;
+import org.example.library_management_system.Dtos.AuthDtos.RegisterRequestDTO;
+import org.example.library_management_system.Dtos.AuthDtos.RegisterResponseDTO;
+import org.example.library_management_system.Enums.UserEnum;
+import org.example.library_management_system.Models.User;
+import org.example.library_management_system.Repository.UserRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+@RequiredArgsConstructor
+public class AuthServices {
+
+    private final UserRepository userRepository;
+//    @Autowired
+//    private String passwordEncoder;
+
+    // ++++++++++++++++++++++++ User Registration Services ++++++++++++++++++++++++++++++++++++ \\
+
+    public RegisterResponseDTO registerService(RegisterRequestDTO signupRequestDTO) {
+        if (userRepository.existsByEmail(signupRequestDTO.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
+        }
+
+        User user = new User();
+        user.setUsername(signupRequestDTO.getUserName());
+        user.setEmail(signupRequestDTO.getEmail());
+        user.setPassword(signupRequestDTO.getPassword());
+        user.setRole(UserEnum.Role.USER);
+
+        User saveUser = userRepository.save(user);
+
+        return new RegisterResponseDTO(
+                saveUser.getId(),
+                saveUser.getUsername(),
+                saveUser.getEmail(),
+                null
+        );
+    }
+
+
+}
+
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Models/Books.java ===
+package org.example.library_management_system.Models;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.Setter;
+import org.example.library_management_system.Enums.BookEnums;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.UUID;
+
+@Entity
+@Table(name = "Books")
+@Getter
+@Setter
+public class Books {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false)
+    @NotBlank(message = "Book Name is required")
+    private String bookTitle;
+
+    @NotBlank(message = "Author Name is required")
+    private String authorName;
+    private int bookLength;
+    private int price;
+    private String bookUrl;
+    @Enumerated(EnumType.STRING)
+    private BookEnums.BookCategory bookCategory;
+    @Enumerated(EnumType.STRING)
+    private BookEnums.BookType bookType;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "User_Books",
+            joinColumns = @JoinColumn(name = "book_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    private Set<User> users;
+
+    @Column(name = "is_deleted")
+    private boolean isDeleted = false; //default delete will false.
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    private LocalDateTime bookPublishDate;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Models/User.java ===
+package org.example.library_management_system.Models;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.Getter;
+import lombok.Setter;
+import org.example.library_management_system.Enums.UserEnum;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+
+@Entity
+@Table(name = "Users")
+@Getter
+@Setter
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+    @NotNull
+    private String username;
+
+    @NotBlank(message = "Email field cannot be left blank")
+    @Email(message = "Please enter a valid email address format")
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    private String password;
+    private String address;
+    private int age;
+    private String contact;
+
+    @ManyToMany(mappedBy = "users")
+    private Set<Books> borrowedBooks;
+
+    @Enumerated(EnumType.STRING)
+    private UserEnum.Role role;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Reopsitory/UserRepository.java ===
+package org.example.library_management_system.Repository;
+
+import org.example.library_management_system.Models.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.UUID;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, UUID> {
+
+    boolean existsByEmail(String email);
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Reopsitory/BookRepository.java ===
+package org.example.library_management_system.Repository;
+
+import org.example.library_management_system.Models.Books;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface BookRepository extends JpaRepository <Books, UUID> {
+    boolean existsByBookTitleAndAuthorName(String title, String author);
+   List<Books> findByIsDeletedFalse();
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/LibraryManagementSystemApplication.java ===
+package org.example.library_management_system;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class LibraryManagementSystemApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(LibraryManagementSystemApplication.class, args);
+
+    System.out.println("This is my first docker project");
+    }
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/AuthDtos/RegisterResponseDTO.java ===
+package org.example.library_management_system.Dtos.AuthDtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class RegisterResponseDTO {
+    private UUID id;
+    private String userName;
+    private String email;
+    private String token;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/AuthDtos/LoginResponseDTO.java ===
+package org.example.library_management_system.Dtos.AuthDtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class LoginResponseDTO {
+    private UUID id;
+    private String username;
+    private String token;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/AuthDtos/RegisterRequestDTO.java ===
+package org.example.library_management_system.Dtos.AuthDtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class RegisterRequestDTO {
+    private String userName;
+    private String email;
+    private String password;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/AuthDtos/LoginRequestDTO.java ===
+package org.example.library_management_system.Dtos.AuthDtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class LoginRequestDTO {
+
+    private String username;
+    private String password;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/BookDtos/BookResponseDTO.java ===
+package org.example.library_management_system.Dtos.BookDtos;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class BookResponseDTO {
+    private UUID id;
+    private String title;
+    private String author;
+    private int price;
+    private int length;
+    private String category;
+    private String type;
+    private String bookUrl;
+    private LocalDateTime createdAt;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Dtos/BookDtos/BookRequestDTO.java ===
+package org.example.library_management_system.Dtos.BookDtos;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class BookRequestDTO {
+
+    private String title;
+    private String author;
+    private int price;
+    private int length;
+    private String category;
+    private String type;
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Controllers/AuthController.java ===
+package org.example.library_management_system.Controllers;
+
+
+import lombok.RequiredArgsConstructor;
+import org.example.library_management_system.Dtos.AuthDtos.RegisterRequestDTO;
+import org.example.library_management_system.Dtos.AuthDtos.RegisterResponseDTO;
+import org.example.library_management_system.Services.AuthServices;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1")
+@RequiredArgsConstructor
+public class AuthController {
+    private final AuthServices authServices;
+
+    @PostMapping("/registerUser")
+    public ResponseEntity<RegisterResponseDTO> userRegistrationController(@RequestBody RegisterRequestDTO registerRequestDTO){
+        RegisterResponseDTO registerResponseDTO = authServices.registerService(registerRequestDTO);
+        return ResponseEntity.ok(registerResponseDTO);
+
+    }
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Controllers/BooksController.java ===
+package org.example.library_management_system.Controllers;
+
+
+import lombok.RequiredArgsConstructor;
+import org.example.library_management_system.Dtos.BookDtos.BookRequestDTO;
+import org.example.library_management_system.Dtos.BookDtos.BookResponseDTO;
+import org.example.library_management_system.Services.BookServices;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1")
+@RequiredArgsConstructor
+public class BooksController {
+
+    private final BookServices bookServices;
+
+    @PostMapping("/addBook/user/{userId}")
+    public ResponseEntity<BookResponseDTO> addBookController(@RequestBody BookRequestDTO bookRequestDTO, @PathVariable UUID userId){
+        BookResponseDTO responseDTO = bookServices.addBook(bookRequestDTO, userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(responseDTO);
+
+    }
+
+    @GetMapping("/getAllBooks")
+    public ResponseEntity<List<BookResponseDTO>> getAllBookController(){
+        List<BookResponseDTO> responseDTOS = bookServices.getAllBooks();
+        return ResponseEntity.ok(responseDTOS);
+    }
+
+
+    @PatchMapping("/updateBook/{bookId}/user/{userId}")
+    public ResponseEntity<BookResponseDTO> updateBookController(@RequestBody BookRequestDTO bookRequestDTO, @PathVariable UUID bookId, @PathVariable UUID userId){
+        BookResponseDTO responseDTO = bookServices.updateBook(bookRequestDTO, bookId, userId);
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseDTO);
+    }
+
+    @DeleteMapping("/deleteBook/{bookId}/user/{userId}")
+    public ResponseEntity<String> deletedBookController(@PathVariable UUID userId, @PathVariable UUID bookId){
+        String deleteResponse = bookServices.deletedBook(userId, bookId);
+        return ResponseEntity.ok(deleteResponse);
+    }
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Enums/UserEnum.java ===
+package org.example.library_management_system.Enums;
+
+public class UserEnum{
+    public enum Role{
+        ADMIN, USER
+    }
+
+}
+-e 
+
+
+=== src/main/java/org/example/library_management_system/Enums/BookEnums.java ===
+package org.example.library_management_system.Enums;
+
+public class BookEnums {
+
+    public enum BookCategory {
+        // --- FICTION ---
+        FICTION,
+        ACTION_ADVENTURE,
+        CLASSICS,
+        DRAMA,
+        FANTASY,
+        HISTORICAL_FICTION,
+        HORROR,
+        MYSTERY_THRILLER,
+        ROMANCE,
+        SCIENCE_FICTION,
+
+        // --- NON-FICTION ---
+        NON_FICTION,
+        ARTS_PHOTOGRAPHY,
+        BIOGRAPHY_AUTOBIOGRAPHY,
+        BUSINESS_FINANCE,
+        COMPUTER_SCIENCE_TECH,
+        HISTORY,
+        PHILOSOPHY,
+        POLITICS_CIVICS,
+        POETRY,
+        SELF_HELP_MOTIVATION,
+        SCIENCE_NATURE,
+
+        // --- ACADEMIC & PROFESSIONAL ---
+        ACADEMIC_EDUCATION,
+        LAW_LEGAL_STUDIES,
+        MEDICAL_HEALTH,
+        REFERENCE,
+
+        // --- OTHERS ---
+        CHILDREN_BOOKS,
+        COMICS_GRAPHIC_NOVELS,
+        OTHER
+    }
+
+    public enum BookType {
+        HARDCOVER,       // Premium physical book with a rigid protective cover
+        PAPERBACK,       // Standard physical book with a flexible paper cover
+        EBOOK,           // Digital version (PDF, EPUB, Kindle format)
+        AUDIOBOOK,       // Audio recording of the book being read aloud
+        MAGAZINE,        // Periodical publication / journal format
+        COMIC_BOOK,      // Sequential art/panel format
+        JOURNAL_NOTEBOOK // Blank or ruled book meant for writing
+    }
+}-e 
+
+

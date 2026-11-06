@@ -9,9 +9,9 @@ import java.util.UUID;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class SignupRequestDTO {
+public class RegisterResponseDTO {
     private UUID id;
     private String userName;
     private String email;
-    private String password;
+    private String token;
 }

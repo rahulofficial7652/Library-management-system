@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -36,7 +36,7 @@ public class User {
     private String contact;
 
     @ManyToMany(mappedBy = "users")
-    private List<Books> borrowedBooks;
+    private Set<Books> borrowedBooks;
 
     @Enumerated(EnumType.STRING)
     private UserEnum.Role role;
